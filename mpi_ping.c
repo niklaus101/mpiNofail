@@ -23,9 +23,15 @@ int main(int argc, char *argv[])
 		MPI_Recv(&number, 1, MPI_INT, 1, 0, MPI_COMM_WORLD,
 				 MPI_STATUS_IGNORE);
 		printf("Worker is alive\n");
-		// MPI_Irecv
+		// int MPI_Irecv(void *buf, int count, MPI_Datatype datatype, int source,
+        //      int tag, MPI_Comm comm, MPI_Request *request)
 		// MPI_Test - check, if Irecv has complete
-
+        /* int MPI_Test(
+  MPI_Request *request,
+  int *flag,
+  MPI_Status *status*/
+       //sleep() â #include <unistd.h>
+);
 	} 
 	else if (proc_rank == 1) 
 	{

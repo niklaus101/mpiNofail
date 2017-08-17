@@ -12,16 +12,29 @@ int doJob(int job_num)
 	return 2*job_num+1;
 }
 
+int failCond(int proc_num)
+{
+	if (proc_num == 2)
+		return 1;
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
+	double t;
+
 	int proc_rank, proc_count;
+
 	int *job_ids, *job_res;
+	char *count_res;
+
 	int i;
-    int job_num, loc_res; 
+        int job_num, loc_res; 
 	
 	int *flag;
+	char all_job_done;
 	
-	MPI_Request *request;
+	MPI_Request *request, *request1;
     
 	MPI_Status status;
   
@@ -33,22 +46,26 @@ int main(int argc, char *argv[])
 	MPI_Comm_rank(MPI_COMM_WORLD, &proc_rank);
 	
 	request = (MPI_Request *)malloc(proc_count * sizeof(MPI_Request));
+	request1 = (MPI_Request *)malloc(proc_count * sizeof(MPI_Request));
 	flag = (int *)calloc(proc_count, sizeof(int));
 	
 	job_ids = (int *)malloc(proc_count*sizeof(int));
 	for(i=0; i<proc_count; i++)
 		job_ids[i] = i;
 	job_res = (int *)malloc(proc_count*sizeof(int));
-	
+	count_res = (char *)malloc(proc_count*sizeof(char));
+
 	if (proc_rank == 0) 
 	{
 		//ping
 		for(i=1; i<proc_count; i++)
 			MPI_Irecv(&job_res[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD, &request[i]);
 		for(i=1; i<proc_count; i++)
-			MPI_Send(&job_ids[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+			MPI_Isend(&job_ids[i], 1, MPI_INT, i, 0, MPI_COMM_WORLD, &request1[i]);
+	
 		
 		//sleep(0.1); - too small
+		//sleep(0.5); - too small
 		sleep(1);
 		
 		for(i=1; i<proc_count; i++)
@@ -56,7 +73,10 @@ int main(int argc, char *argv[])
 
 		for(i=1; i<proc_count; i++)
 			if(flag[i])
+			{
 				printf("Worker %i is alive\n", i);
+				count_res[i] = 1;
+			}
 			else
 				printf("Worker %i has stopped\n", i);
 	
@@ -64,26 +84,35 @@ int main(int argc, char *argv[])
 		for(i=1; i<proc_count; i++)
 			printf("%i ", job_res[i]);
 		printf("\n");
-		/*MPI_Recv(&number, 1, MPI_INT, 1, 0, MPI_COMM	_WORLD,
-				 MPI_STATUS_IGNORE);*/
-		// int MPI_Irecv(void *buf, int count, MPI_Datatype datatype, int source,
-        //      int tag, MPI_Comm comm, MPI_Request *request)
-		// MPI_Test - check, if Irecv has complete
-        /* int MPI_Test(MPI_Request *request, int *flag,
-						MPI_Status *status);*/
+		
+		all_job_done = 1;
+		for(i = 1; i<proc_count; i++)
+			if(count_res[i] == 0)
+			{ 
+				all_job_done = 0;
+				break; 
+			}
+
+		if(all_job_done)
+			printf("All jobs done");
+		else
+			printf("Not all jobs done");
 	} 
-	else
+	else if(!failCond(proc_rank))
 	{
+
+		t = MPI_Wtime();
+	
 		MPI_Recv(&job_num, 1, MPI_INT, 0, 0, MPI_COMM_WORLD,
 				 MPI_STATUS_IGNORE);
 		printf("Proc %i: leader is alive\n", proc_rank);
-		//printf("Process 1 received number %d from process 0\n",
-		//	   number);
 		
 		loc_res = doJob(job_num);
 		
-		//if(proc_rank!=2) 
-			MPI_Send(&loc_res, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+		MPI_Send(&loc_res, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+	
+		t = MPI_Wtime()-t;	
+		printf("Proc %i: elapsed time is %f\n", proc_rank, t);
 	}
 	
 	MPI_Finalize();
